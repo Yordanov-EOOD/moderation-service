@@ -1,0 +1,57 @@
+name: Build and Push Docker Image
+
+on:
+  push:
+    branches: [ main, master ]
+  workflow_dispatch:
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+        
+      # Clone shared dependency into workspace
+      - name: Clone shared dependency
+        run: git clone https://github.com/Yordanov-EOOD/shared.git shared
+        
+      - name: Create .env file
+        run: |
+          cat > .env << EOF
+          PORT=${{ secrets.MODERATION_SERVICE_PORT || '5000' }}
+          DEBUG=false
+          FLASK_ENV=production
+          USE_ML_MODEL=${{ secrets.USE_ML_MODEL || 'true' }}
+          TOXICITY_THRESHOLD=${{ secrets.TOXICITY_THRESHOLD || '0.515' }}
+          CONFIDENCE_THRESHOLD=${{ secrets.CONFIDENCE_THRESHOLD || '0.3' }}
+          BATCH_SIZE_LIMIT=${{ secrets.BATCH_SIZE_LIMIT || '100' }}
+          CONTENT_LENGTH_LIMIT=${{ secrets.CONTENT_LENGTH_LIMIT || '10000' }}
+          RATE_LIMIT_PER_MINUTE=${{ secrets.RATE_LIMIT_PER_MINUTE || '100' }}
+          LOG_LEVEL=${{ secrets.LOG_LEVEL || 'INFO' }}
+          MODEL_NAME=${{ secrets.MODEL_NAME || 'toxicity-model-fast' }}
+          MODEL_CACHE_DIR=./models
+          USE_GPU=false
+          RATE_LIMIT=${{ secrets.RATE_LIMIT || '100' }}
+          MAX_BATCH_SIZE=${{ secrets.MAX_BATCH_SIZE || '100' }}
+          EOF
+        
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v2
+        
+      - name: Login to DockerHub
+        uses: docker/login-action@v2
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+          
+      - name: Build and push
+        uses: docker/build-push-action@v4
+        with:
+          context: .
+          file: moderation-service/Dockerfile
+          push: true
+          tags: ${{ secrets.DOCKERHUB_USERNAME }}/moderation-service:latest, ${{ secrets.DOCKERHUB_USERNAME }}/moderation-service:${{ github.sha }}
+          cache-from: type=registry,ref=${{ secrets.DOCKERHUB_USERNAME }}/moderation-service:buildcache
+          cache-to: type=registry,ref=${{ secrets.DOCKERHUB_USERNAME }}/moderation-service:buildcache,mode=max
