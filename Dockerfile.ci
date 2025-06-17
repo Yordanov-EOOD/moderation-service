@@ -21,7 +21,10 @@ RUN pip install --no-cache-dir --upgrade pip && \
 COPY src/ ./src/
 COPY .env.example .env
 
-# Create models directory for ML model cache
+# Copy ML model files
+COPY models/ ./models/
+
+# Create models directory for ML model cache (if not exists)
 RUN mkdir -p ./models
 
 # Add src directory to Python path
